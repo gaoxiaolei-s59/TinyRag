@@ -22,6 +22,11 @@ public class ParseController {
 
     private final TikaParseService tikaParseService;
 
+    /**
+     * 解析传入的文档
+     * @param file
+     * @return
+     */
     @PostMapping(value = "/parse", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ParseResult> parse(MultipartFile file) {
         ParseResult parseResult = tikaParseService.parseFile(file);
@@ -31,5 +36,7 @@ public class ParseController {
             return ResponseEntity.badRequest().body(parseResult);
         }
     }
+
+
 
 }
