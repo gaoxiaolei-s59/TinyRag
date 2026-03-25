@@ -16,8 +16,12 @@ import org.xml.sax.SAXException;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -38,6 +42,32 @@ public class TikaParseService {
      * 这里设置为 10MB 字符
      */
     private static final int MAX_TEXT_LENGTH = 10 * 1024 * 1024;
+
+    /**
+     * 单个切块的最大字符数。
+     */
+    private static final int CHUNK_SIZE = 800;
+
+    /**
+     * 相邻切块的重叠字符数，便于保持上下文连续。
+     */
+    private static final int CHUNK_OVERLAP = 100;
+
+    private static final Set<String> COMMON_HEADINGS = Set.of(
+            "教育背景",
+            "实习经验",
+            "项目经历",
+            "项目",
+            "项目描述",
+            "主要职责与技术贡献",
+            "核心亮点",
+            "技能",
+            "专业技能",
+            "自我评价",
+            "求职意向",
+            "个人信息",
+            "工作经历"
+    );
 
     /**
      * 解析文件，提取文本和元数据
@@ -97,8 +127,10 @@ public class TikaParseService {
                 return ParseResult.failure("解析结果为空，可能是扫描件或加密文档");
             }
 
-            log.info("文件 {} 解析成功，提取文本长度: {}", originalFilename, content.length());
-            return ParseResult.success(mimeType, content, metadataMap);
+            List<String> chunks = splitIntoChunks(content);
+
+            log.info("文件 {} 解析成功，提取文本长度: {}, 切块数量: {}", originalFilename, content.length(), chunks.size());
+            return ParseResult.success(mimeType, content, metadataMap, chunks);
 
         } catch (IOException e) {
             log.error("读取文件失败: {}", originalFilename, e);
@@ -170,5 +202,144 @@ public class TikaParseService {
         }
 
         return result;
+    }
+
+    /**
+     * 将解析后的文本按段落优先切块；如果段落过长，再按固定窗口拆分。
+     */
+    private List<String> splitIntoChunks(String content) {
+        List<String> chunks = new ArrayList<>();
+        if (content == null || content.isBlank()) {
+            return chunks;
+        }
+
+        List<Section> sections = splitSections(content);
+        for (Section section : sections) {
+            String block = section.toText();
+            if (block.length() <= CHUNK_SIZE) {
+                chunks.add(block);
+            } else {
+                splitLongText(block, chunks);
+            }
+        }
+
+        return chunks;
+    }
+
+    private List<Section> splitSections(String content) {
+        List<Section> sections = new ArrayList<>();
+        String[] lines = content.split("\\n");
+        String currentHeading = "正文";
+        List<String> currentLines = new ArrayList<>();
+
+        for (String line : lines) {
+            String normalized = line == null ? "" : line.trim();
+            if (normalized.isEmpty()) {
+                continue;
+            }
+
+            if (isHeadingLine(normalized)) {
+                addSection(sections, currentHeading, currentLines);
+                currentHeading = normalized;
+                currentLines = new ArrayList<>();
+                continue;
+            }
+
+            currentLines.add(normalized);
+        }
+
+        addSection(sections, currentHeading, currentLines);
+        return mergeSmallSections(sections);
+    }
+
+    private boolean isHeadingLine(String line) {
+        if (COMMON_HEADINGS.contains(line)) {
+            return true;
+        }
+
+        if (line.length() > 20) {
+            return false;
+        }
+
+        if (line.contains("：") || line.contains(":") || line.contains("http")) {
+            return false;
+        }
+
+        return line.matches("^[\\p{IsHan}A-Za-z0-9（）()\\- /]+$")
+                && !line.matches(".*\\d{4}.*");
+    }
+
+    private void addSection(List<Section> sections, String heading, List<String> lines) {
+        if (lines.isEmpty()) {
+            return;
+        }
+        sections.add(new Section(heading, new ArrayList<>(lines)));
+    }
+
+    private List<Section> mergeSmallSections(List<Section> sections) {
+        List<Section> merged = new ArrayList<>();
+        Section pending = null;
+
+        for (Section section : sections) {
+            if (pending == null) {
+                pending = section;
+                continue;
+            }
+
+            if (pending.length() < CHUNK_SIZE / 3) {
+                pending = pending.merge(section);
+            } else {
+                merged.add(pending);
+                pending = section;
+            }
+        }
+
+        if (pending != null) {
+            merged.add(pending);
+        }
+
+        return merged;
+    }
+
+    private void splitLongText(String text, List<String> chunks) {
+        int start = 0;
+        while (start < text.length()) {
+            int end = Math.min(start + CHUNK_SIZE, text.length());
+            chunks.add(text.substring(start, end).trim());
+            if (end == text.length()) {
+                break;
+            }
+            start = Math.max(end - CHUNK_OVERLAP, start + 1);
+        }
+    }
+
+    private void flushChunk(List<String> chunks, StringBuilder currentChunk) {
+        if (currentChunk.length() == 0) {
+            return;
+        }
+        chunks.add(currentChunk.toString().trim());
+        currentChunk.setLength(0);
+    }
+
+    private record Section(String heading, List<String> lines) {
+        String toText() {
+            if ("正文".equals(heading)) {
+                return String.join("\n", lines).trim();
+            }
+            return (heading + "\n" + String.join("\n", lines)).trim();
+        }
+
+        int length() {
+            return toText().length();
+        }
+
+        Section merge(Section other) {
+            List<String> merged = new ArrayList<>(this.lines);
+            if (!"正文".equals(other.heading)) {
+                merged.add(other.heading);
+            }
+            merged.addAll(other.lines);
+            return new Section(this.heading, merged);
+        }
     }
 }

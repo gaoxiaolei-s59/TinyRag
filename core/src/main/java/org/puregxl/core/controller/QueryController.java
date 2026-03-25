@@ -3,7 +3,7 @@ package org.puregxl.core.controller;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.puregxl.core.service.Rag.QueryService;
+import org.puregxl.core.service.rag.QueryService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

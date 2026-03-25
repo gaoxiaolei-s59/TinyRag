@@ -1,4 +1,4 @@
-package org.puregxl.core.service.Rag;
+package org.puregxl.core.service.rag;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;

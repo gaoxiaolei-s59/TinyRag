@@ -19,10 +19,11 @@ rag:
 
 ai:
   embedding:
-    provider: ollama
-    ollama:
-      url: http://localhost:11434
-      model: qwen3-embedding:8b-fp16
+    provider: siliconflow
+    siliconflow:
+      url: https://api.siliconflow.cn/v1/embeddings
+      api-key: sk-rjtfqcpnhpzonswkebygmaqnqvibqcndgqxqfxghizuguthf
+      model: Qwen/Qwen3-Embedding-8B
 
   chat:
     provider: bailian

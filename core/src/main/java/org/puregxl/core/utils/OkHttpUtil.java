@@ -28,7 +28,7 @@ public class OkHttpUtil {
     }
 
     public JsonObject get(String url) throws IOException {
-        Request request = baseBuilder(url)
+        Request request = baseBuilder(url, apiKey)
                 .get()
                 .build();
         return execute(request);
@@ -42,52 +42,62 @@ public class OkHttpUtil {
             }
         }
 
-        Request request = baseBuilder(urlBuilder.build().toString())
+        Request request = baseBuilder(urlBuilder.build().toString(), apiKey)
                 .get()
                 .build();
         return execute(request);
     }
 
     public JsonObject post(String url, Object requestBody) throws IOException {
-        Request request = baseBuilder(url)
+        Request request = baseBuilder(url, apiKey)
+                .post(buildJsonBody(requestBody))
+                .build();
+        return execute(request);
+    }
+
+    public JsonObject post(String url, Object requestBody, String bearerToken) throws IOException {
+        Request request = baseBuilder(url, bearerToken)
                 .post(buildJsonBody(requestBody))
                 .build();
         return execute(request);
     }
 
     public JsonObject put(String url, Object requestBody) throws IOException {
-        Request request = baseBuilder(url)
+        Request request = baseBuilder(url, apiKey)
                 .put(buildJsonBody(requestBody))
                 .build();
         return execute(request);
     }
 
     public JsonObject patch(String url, Object requestBody) throws IOException {
-        Request request = baseBuilder(url)
+        Request request = baseBuilder(url, apiKey)
                 .patch(buildJsonBody(requestBody))
                 .build();
         return execute(request);
     }
 
     public JsonObject delete(String url) throws IOException {
-        Request request = baseBuilder(url)
+        Request request = baseBuilder(url, apiKey)
                 .delete()
                 .build();
         return execute(request);
     }
 
     public JsonObject delete(String url, Object requestBody) throws IOException {
-        Request request = baseBuilder(url)
+        Request request = baseBuilder(url, apiKey)
                 .delete(buildJsonBody(requestBody))
                 .build();
         return execute(request);
     }
 
-    private Request.Builder baseBuilder(String url) {
-        return new Request.Builder()
+    private Request.Builder baseBuilder(String url, String bearerToken) {
+        Request.Builder builder = new Request.Builder()
                 .url(url)
-                .addHeader("Authorization", "Bearer " + apiKey)
                 .addHeader("Content-Type", "application/json");
+        if (bearerToken != null && !bearerToken.isBlank()) {
+            builder.addHeader("Authorization", "Bearer " + bearerToken);
+        }
+        return builder;
     }
 
     private RequestBody buildJsonBody(Object requestBody) {
